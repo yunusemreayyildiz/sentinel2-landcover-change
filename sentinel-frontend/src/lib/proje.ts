@@ -1,3 +1,5 @@
+import type { AnalizBbox } from "@/lib/api";
+
 // proje_durumu.md ile birebir: Arnavutkoy / IGA Havalimani cevresi
 export const AOI_BBOX = {
   bati: 28.6,
@@ -6,6 +8,14 @@ export const AOI_BBOX = {
   kuzey: 41.35,
 };
 
+// Backend "min_lon,min_lat,max_lon,max_lat" bbox sirasiyla ayni (main.py).
+export const AOI_BBOX_TUPLE: AnalizBbox = [
+  AOI_BBOX.bati,
+  AOI_BBOX.guney,
+  AOI_BBOX.dogu,
+  AOI_BBOX.kuzey,
+];
+
 export const AOI_MERKEZ: [number, number] = [41.225, 28.75];
 
 export const AOI_SINIRLARI: [[number, number], [number, number]] = [
@@ -13,11 +23,20 @@ export const AOI_SINIRLARI: [[number, number], [number, number]] = [
   [AOI_BBOX.kuzey, AOI_BBOX.dogu],
 ];
 
-// Yaklasik AOI alani (bbox tabanli, poligonla kirpilmis degil).
-// Enlem/boylam farkini ortalama enlemde km'ye cevirip dikdortgen alan hesaplar.
-const ORTALAMA_ENLEM_RADYAN = (AOI_MERKEZ[0] * Math.PI) / 180;
-const KM_PER_DERECE_BOYLAM = 111.32 * Math.cos(ORTALAMA_ENLEM_RADYAN);
-const KM_PER_DERECE_ENLEM = 110.57;
-const GENISLIK_KM = (AOI_BBOX.dogu - AOI_BBOX.bati) * KM_PER_DERECE_BOYLAM;
-const YUKSEKLIK_KM = (AOI_BBOX.kuzey - AOI_BBOX.guney) * KM_PER_DERECE_ENLEM;
-export const AOI_ALAN_HA = GENISLIK_KM * YUKSEKLIK_KM * 100; // km^2 -> ha
+// sentinel-backend/CLAUDE.md madde 6 ile ayni ust sinir.
+export const BBOX_ALAN_LIMITI_KM2 = 750;
+
+// Yaklasik alan (bbox tabanli, poligonla kirpilmis degil). Enlem/boylam
+// farkini ortalama enlemde km'ye cevirip dikdortgen alan hesaplar. Backend
+// pyproj.Geod ile gercek jeodezik alani hesaplar (CLAUDE.md madde 6) --
+// bu yalnizca arayuzde erken uyari icin yaklasik bir istemci tarafi kontroludur.
+export function bboxAlaniKm2([minLon, minLat, maxLon, maxLat]: AnalizBbox): number {
+  const ortalamaEnlemRadyan = ((minLat + maxLat) / 2) * (Math.PI / 180);
+  const kmPerDereceBoylam = 111.32 * Math.cos(ortalamaEnlemRadyan);
+  const kmPerDereceEnlem = 110.57;
+  const genislikKm = (maxLon - minLon) * kmPerDereceBoylam;
+  const yukseklikKm = (maxLat - minLat) * kmPerDereceEnlem;
+  return genislikKm * yukseklikKm;
+}
+
+export const AOI_ALAN_HA = bboxAlaniKm2(AOI_BBOX_TUPLE) * 100; // km^2 -> ha

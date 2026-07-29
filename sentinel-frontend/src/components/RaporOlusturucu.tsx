@@ -6,7 +6,7 @@ import { raporGetir, type RaporSonucu } from "@/lib/api";
 
 const TAHMINI_SURE_SN = 40;
 
-export default function RaporOlusturucu() {
+export default function RaporOlusturucu({ isNo }: { isNo?: string }) {
   const [durum, setDurum] = useState<"beklemede" | "yukleniyor" | "hazir" | "hata">(
     "beklemede"
   );
@@ -28,7 +28,7 @@ export default function RaporOlusturucu() {
       setGecenSaniye((s) => s + 1);
     }, 1000);
     try {
-      const veri = await raporGetir();
+      const veri = await raporGetir(isNo);
       setSonuc(veri);
       setDurum("hazir");
     } catch (e) {

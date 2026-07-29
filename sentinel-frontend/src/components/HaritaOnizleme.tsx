@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { AnalizBbox } from "@/lib/api";
+import { bboxAlaniKm2 } from "@/lib/proje";
 
 const HaritaOnizlemeMap = dynamic(() => import("./HaritaOnizlemeMap"), {
   ssr: false,
@@ -11,12 +13,20 @@ const HaritaOnizlemeMap = dynamic(() => import("./HaritaOnizlemeMap"), {
   ),
 });
 
-export default function HaritaOnizleme() {
+export default function HaritaOnizleme({
+  bbox,
+  onBboxDegisti,
+}: {
+  bbox: AnalizBbox;
+  onBboxDegisti: (bbox: AnalizBbox) => void;
+}) {
+  const alanKm2 = bboxAlaniKm2(bbox);
+
   return (
     <div className="relative flex-1 h-full bg-[#212d31] overflow-hidden">
-      <HaritaOnizlemeMap />
+      <HaritaOnizlemeMap bbox={bbox} onBboxDegisti={onBboxDegisti} />
       <p className="absolute top-4 right-6 z-[500] text-[11px] font-medium text-[#8fa6a3] bg-[#212d31]/80 px-2 py-1 rounded pointer-events-none">
-        41.18°N 28.74°E · Sentinel-2 L2A
+        {alanKm2.toFixed(0)} km² · Sentinel-2 L2A
       </p>
     </div>
   );

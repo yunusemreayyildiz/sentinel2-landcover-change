@@ -12,6 +12,8 @@ bölümü, neden ayrıldıkları:
 
 from __future__ import annotations
 
+import json
+
 from src import _gis_env  # noqa: F401 — rasterio/odc.stac'tan ÖNCE çalışmalı
 
 from src.preprocess import nihai_maske as nihai_maske_hesapla
@@ -73,6 +75,24 @@ def analiz_calistir(
     )
 
 
+def _geojson_uret(gdf) -> dict:
+    """gdf'nin TAMAMINI (aday_poligon sayısı kadar, durum ayrımı gözetmeden)
+    frontend'in `degisim_analizi.geojson` şemasıyla aynı FeatureCollection'a
+    çevirir — bkz. sentinel-frontend/lib/api.ts `DegisimOzellikleri`.
+
+    Geometri EPSG:4326'ya (Leaflet için) reprojekte edilir; `merkez_x`/`merkez_y`
+    özellikleri KASITLI OLARAK projeksiyon CRS'inde (ör. EPSG:32635) bırakılır —
+    statik referans dosyasıyla aynı konvansiyon, frontend bu alanları şu an
+    kullanmıyor.
+    """
+    if gdf.empty:
+        return {"type": "FeatureCollection", "features": []}
+    disa_aktarilacak = gdf.rename(columns={"etiket": "deger"})[
+        ["deger", "alan_ha", "merkez_x", "merkez_y", "sinif", "guven", "durum", "geometry"]
+    ]
+    return json.loads(disa_aktarilacak.to_crs(4326).to_json())
+
+
 def _ozet_uret(gdf, bbox, tarih_once, tarih_sonra, item_once, item_sonra) -> dict:
     """gdf'den analiz_ozeti.json şemasıyla aynı dict'i üretir."""
     aday_poligon = int(len(gdf))
@@ -100,6 +120,7 @@ def _ozet_uret(gdf, bbox, tarih_once, tarih_sonra, item_once, item_sonra) -> dic
     return {
         "proje": PROJE_ADI,
         "aoi": {"bbox": list(bbox), "crs": "EPSG:4326"},
+        "geojson": _geojson_uret(gdf),
         "sahneler": {
             "once": f"{tarih_once} ({item_once.id})",
             "sonra": f"{tarih_sonra} ({item_sonra.id})",

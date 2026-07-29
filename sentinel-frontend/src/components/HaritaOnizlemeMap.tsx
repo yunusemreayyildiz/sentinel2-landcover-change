@@ -1,10 +1,19 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { MapContainer, TileLayer, Rectangle, Tooltip } from "react-leaflet";
-import { AOI_MERKEZ, AOI_SINIRLARI } from "@/lib/proje";
+import "leaflet-draw/dist/leaflet.draw.css";
+import { MapContainer, TileLayer } from "react-leaflet";
+import { AOI_MERKEZ } from "@/lib/proje";
+import type { AnalizBbox } from "@/lib/api";
+import BboxCizimKatmani from "@/components/BboxCizimKatmani";
 
-export default function HaritaOnizlemeMap() {
+export default function HaritaOnizlemeMap({
+  bbox,
+  onBboxDegisti,
+}: {
+  bbox: AnalizBbox;
+  onBboxDegisti: (bbox: AnalizBbox) => void;
+}) {
   return (
     <MapContainer
       center={AOI_MERKEZ}
@@ -16,19 +25,7 @@ export default function HaritaOnizlemeMap() {
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <Rectangle
-        bounds={AOI_SINIRLARI}
-        pathOptions={{
-          color: "#ff383c",
-          weight: 2,
-          dashArray: "6 4",
-          fillOpacity: 0.05,
-        }}
-      >
-        <Tooltip permanent direction="top" className="aoi-etiket">
-          AOI · Arnavutköy
-        </Tooltip>
-      </Rectangle>
+      <BboxCizimKatmani bbox={bbox} onBboxDegisti={onBboxDegisti} />
     </MapContainer>
   );
 }

@@ -1,14 +1,16 @@
 import json
 import os
 from pathlib import Path
+from uuid import uuid4
 
 import anthropic
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
-from src.pipeline import analiz_calistir
-from src.scene_selection import SahneBulunamadiHatasi, TileSiniriAsimiHatasi
+from src.pipeline import analiz_calistir, analiz_calistir_sahnelerle
+from src.scene_selection import SahneBulunamadiHatasi, TileSiniriAsimiHatasi, sahne_ciftini_sec
 from src.stac_fetch import BboxHatasi
 from src.v1_candidates import MevsimHatasi
 
@@ -19,13 +21,49 @@ app = FastAPI(title="Sentinel-2 Değişim Analizi API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
 VERI_KLASORU = Path(__file__).parent / "data"
 MODEL_CHECKPOINT = str(Path(__file__).parent / "models" / "best_effnetb0_rgb.pt")
 CLAUDE_MODEL = "claude-opus-4-8"
+
+# Async iş katmanı (başlat → iş no → durum sorgula, bkz. CLAUDE.md "sonraki faz").
+# Bellek içi iş deposu: tek-worker geliştirme sunucusu için yeterli, çoklu worker/
+# restart arası kalıcılık gerekmiyor (iş durumu yalnızca bir analiz oturumu boyunca anlamlı).
+isler: dict[str, dict] = {}
+
+
+class AnalizIstegi(BaseModel):
+    bbox: list[float]
+    tarih_once: str
+    tarih_sonra: str
+
+
+def _analiz_isini_yurut(
+    is_no: str, bbox: tuple[float, float, float, float], tarih_once: str, tarih_sonra: str
+) -> None:
+    """BackgroundTasks içinde çalışır — yanıt döndükten SONRA başlar.
+
+    İki aşama raporlanır (sahne_araniyor / goruntu_indiriliyor): sahne seçimi
+    (canlı STAC katalog araması) ayrı, gerçekten ölçülebilir bir adım; geri kalan
+    indirme+indeks+CNN `analiz_calistir_sahnelerle` içinde tek bloktan geçtiği için
+    ayrıştırılamıyor — sahte ara-aşama uydurmak yerine tek adım olarak bırakıldı.
+    """
+    try:
+        isler[is_no] = {"durum": "calisiyor", "asama": "sahne_araniyor", "ilerleme": 10}
+        item_once, item_sonra = sahne_ciftini_sec(bbox, tarih_once, tarih_sonra)
+
+        isler[is_no] = {"durum": "calisiyor", "asama": "goruntu_indiriliyor", "ilerleme": 40}
+        sonuc = analiz_calistir_sahnelerle(
+            item_once, item_sonra, bbox, tarih_once, tarih_sonra, MODEL_CHECKPOINT
+        )
+        isler[is_no] = {"durum": "bitti", "asama": "tamamlandi", "ilerleme": 100, "sonuc": sonuc}
+    except (BboxHatasi, MevsimHatasi, SahneBulunamadiHatasi, TileSiniriAsimiHatasi) as e:
+        isler[is_no] = {"durum": "hata", "hata": str(e)}
+    except Exception as e:
+        isler[is_no] = {"durum": "hata", "hata": f"Beklenmeyen hata: {e}"}
 
 RAPOR_SISTEM_PROMPTU = """Sen bir GIS analiz kurumunda çalışan teknik rapor yazarısın. Sana JSON formatında \
 bir uydu görüntüsü değişim analizi özeti verilecek. Bu özetten karar vericilere yönelik resmi, kurumsal \
@@ -98,13 +136,40 @@ def analiz_ozeti(
         raise HTTPException(status_code=422, detail=str(e))
 
 
+@app.post("/analiz")
+def analiz_baslat(istek: AnalizIstegi, arka_plan: BackgroundTasks):
+    """Analizi arka planda başlatır, hemen bir iş no döner (senkron GET /analiz'in
+    aksine tarayıcıyı 1-2 dk açık tutmaz). İlerleme/sonuç için bkz. GET /analiz/{is_no}/durum."""
+    if len(istek.bbox) != 4:
+        raise HTTPException(
+            status_code=400,
+            detail="bbox 4 sayı olmalı: [min_lon, min_lat, max_lon, max_lat].",
+        )
+    bbox_tuple = tuple(istek.bbox)
+    is_no = uuid4().hex
+    isler[is_no] = {"durum": "calisiyor", "asama": "sahne_araniyor", "ilerleme": 0}
+    arka_plan.add_task(_analiz_isini_yurut, is_no, bbox_tuple, istek.tarih_once, istek.tarih_sonra)
+    return {"isNo": is_no}
+
+
+@app.get("/analiz/{is_no}/durum")
+def analiz_durum(is_no: str):
+    is_kaydi = isler.get(is_no)
+    if is_kaydi is None:
+        raise HTTPException(status_code=404, detail=f"Bilinmeyen iş no: {is_no}")
+    return is_kaydi
+
+
 @app.get("/geojson")
 def degisim_geojson():
     return json_dosyasi_oku("degisim_analizi.geojson")
 
 
 @app.get("/rapor")
-def rapor_uret():
+def rapor_uret(is_no: str | None = None):
+    """is_no verilmezse statik Arnavutköy demo özetini raporlar (eski davranış).
+    Verilirse ilgili dinamik işin sonucunu raporlar — iş bitmemişse/hataysa
+    anlamlı hata döner (sessizce statik demoya düşmez)."""
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise HTTPException(
             status_code=500,
@@ -112,7 +177,22 @@ def rapor_uret():
             "Terminali durdurup (Ctrl+C) anahtarı ayarlayıp uvicorn'u yeniden başlat.",
         )
 
-    ozet = json_dosyasi_oku("analiz_ozeti.json")
+    if is_no is not None:
+        is_kaydi = isler.get(is_no)
+        if is_kaydi is None:
+            raise HTTPException(status_code=404, detail=f"Bilinmeyen iş no: {is_no}")
+        if is_kaydi["durum"] != "bitti":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Analiz henüz tamamlanmadı (durum: {is_kaydi['durum']}).",
+            )
+        ozet = is_kaydi["sonuc"]
+    else:
+        ozet = json_dosyasi_oku("analiz_ozeti.json")
+
+    # geojson (varsa) rapor girdisinden çıkarılır -- LLM için gereksiz, yüzlerce
+    # KB koordinat token'ı israf eder; rapor yalnızca sayısal özete bakar.
+    rapor_girdisi = {k: v for k, v in ozet.items() if k != "geojson"}
     client = anthropic.Anthropic()
 
     try:
@@ -123,7 +203,7 @@ def rapor_uret():
             messages=[
                 {
                     "role": "user",
-                    "content": f"Analiz özeti:\n\n{json.dumps(ozet, ensure_ascii=False, indent=2)}",
+                    "content": f"Analiz özeti:\n\n{json.dumps(rapor_girdisi, ensure_ascii=False, indent=2)}",
                 }
             ],
         )
