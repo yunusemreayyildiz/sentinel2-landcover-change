@@ -49,7 +49,7 @@ def json_dosyasi_oku(dosya_adi: str):
 
 @app.get("/")
 def ana_sayfa():
-    return {"durum": "calisiyor", "proje": "Sentinel-2 Arazi Örtüsü Değişim Tespiti"}
+    return {"status": "calisiyor", "proje": "Sentinel-2 Arazi Örtüsü Değişim Tespiti"}
 
 
 @app.get("/analiz")
