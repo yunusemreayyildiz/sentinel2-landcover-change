@@ -1,0 +1,115 @@
+{
+  "proje": "Sentinel-2 Arazi Örtüsü Değişim Tespiti",
+  "aoi": {
+    "ad": "Arnavutköy / İGA çevresi",
+    "bbox": [
+      28.6,
+      41.1,
+      28.9,
+      41.35
+    ],
+    "crs": "EPSG:4326"
+  },
+  "sahneler": {
+    "once": "2018-07-04 (S2A, %0 bulut)",
+    "sonra": "2025-07-09 (S2A, %0 bulut)",
+    "tile": "35TPF"
+  },
+  "yontem": {
+    "v1": "dNDVI < -0.30 & dNDBI > 0.20, SCL su+gecerlilik maskesi, min alan 0.1 ha",
+    "v2": "EfficientNet-B0 (EuroSAT, test acc 0.9635) + istatistik esleme, guven >= 0.5",
+    "huni_yuzde": [
+      10.6,
+      8.55,
+      4.01
+    ],
+    "cnn_onay": {
+      "poligon_orani": 0.47,
+      "alan_orani": 0.39
+    }
+  },
+  "sonuclar": {
+    "aday_poligon": 2584,
+    "onaylandi": 1227,
+    "elendi": 1224,
+    "dogrulanamadi": 133,
+    "onayli_alan_ha": 1143.0,
+    "sinif_dagilimi": {
+      "Highway": 674,
+      "Industrial": 394,
+      "Residential": 159
+    },
+    "en_buyuk_10": [
+      {
+        "alan_ha": 68.3,
+        "sinif": "Highway",
+        "guven": 0.992,
+        "merkez_lat": 41.25651,
+        "merkez_lon": 28.79394
+      },
+      {
+        "alan_ha": 39.79,
+        "sinif": "Highway",
+        "guven": 0.991,
+        "merkez_lat": 41.22618,
+        "merkez_lon": 28.66665
+      },
+      {
+        "alan_ha": 37.7,
+        "sinif": "Industrial",
+        "guven": 0.598,
+        "merkez_lat": 41.22456,
+        "merkez_lon": 28.85481
+      },
+      {
+        "alan_ha": 28.3,
+        "sinif": "Highway",
+        "guven": 0.984,
+        "merkez_lat": 41.26331,
+        "merkez_lon": 28.76243
+      },
+      {
+        "alan_ha": 24.55,
+        "sinif": "Industrial",
+        "guven": 0.998,
+        "merkez_lat": 41.25564,
+        "merkez_lon": 28.80359
+      },
+      {
+        "alan_ha": 23.06,
+        "sinif": "Highway",
+        "guven": 0.684,
+        "merkez_lat": 41.11168,
+        "merkez_lon": 28.61694
+      },
+      {
+        "alan_ha": 18.17,
+        "sinif": "Industrial",
+        "guven": 0.806,
+        "merkez_lat": 41.25351,
+        "merkez_lon": 28.78127
+      },
+      {
+        "alan_ha": 17.59,
+        "sinif": "Highway",
+        "guven": 0.844,
+        "merkez_lat": 41.15973,
+        "merkez_lon": 28.63695
+      },
+      {
+        "alan_ha": 14.34,
+        "sinif": "Highway",
+        "guven": 1.0,
+        "merkez_lat": 41.12889,
+        "merkez_lon": 28.85014
+      },
+      {
+        "alan_ha": 12.45,
+        "sinif": "Residential",
+        "guven": 0.699,
+        "merkez_lat": 41.34135,
+        "merkez_lon": 28.61186
+      }
+    ]
+  }
+}

@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+
+  /* Figma tasarım token'ları (Yapılaşma Tespiti - Arayüz Taslağı) */
+  --accents-brown: #ac7f5e;
+  --accents-red: #ff383c;
+  --backgrounds-secondary: #f2f2f7;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --color-accents-brown: var(--accents-brown);
+  --color-accents-red: var(--accents-red);
+  --color-backgrounds-secondary: var(--backgrounds-secondary);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #212d31;
+}
+
+.aoi-etiket {
+  background: var(--accents-red) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #14343b;
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px !important;
+  border-radius: 4px !important;
+}
+
+.aoi-etiket::before {
+  border-top-color: var(--accents-red) !important;
+}
+
+.rapor-metni h1,
+.rapor-metni h2,
+.rapor-metni h3 {
+  font-weight: 700;
+  color: #14343b;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+
+.rapor-metni h1 {
+  font-size: 17px;
+}
+
+.rapor-metni h2 {
+  font-size: 15px;
+}
+
+.rapor-metni h3 {
+  font-size: 14px;
+}
+
+.rapor-metni p,
+.rapor-metni ul,
+.rapor-metni ol {
+  margin-bottom: 0.6em;
+}
+
+.rapor-metni ul,
+.rapor-metni ol {
+  padding-left: 1.4em;
+}
+
+.rapor-metni ul {
+  list-style: disc;
+}
+
+.rapor-metni ol {
+  list-style: decimal;
+}
+
+.rapor-metni strong {
+  font-weight: 700;
+}
+
+.rapor-metni table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.6em 0;
+}
+
+.rapor-metni th,
+.rapor-metni td {
+  border: 1px solid #d8dfde;
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.rapor-metni th {
+  background: #f2f2f7;
+  font-weight: 600;
+}
