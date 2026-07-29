@@ -36,20 +36,26 @@ sentinel-frontend/           ← Next.js (ayrı bağlam, ayrı CLAUDE.md)
 
 - **v3 (LLM rapor) YAPILDI:** `/rapor` endpoint'i `analiz_ozeti.json`'u alıp
   **Claude Opus 4.8** ile doğal dilde kurum raporu üretiyor. Planlı değil, canlı.
-- Dinamik pipeline modülleri Paket 1-2 tamam, Paket 3 sürüyor (aşağı bak).
+- **Dinamik pipeline (Paket 1-5) YAPILDI.** `/analiz` artık iki modlu:
+  parametresiz → statik Arnavutköy demo JSON'u (eski davranış, frontend
+  kırılmaz); `bbox`/`tarih_once`/`tarih_sonra` query param'larıyla →
+  `pipeline.analiz_calistir()` canlı çalışır. **SENKRON ve YAVAŞ** (~1-2 dk,
+  STAC indirme + CNN çıkarımı) — async iş katmanı (başlat→iş no→durum) henüz
+  yok, bkz. DURUM/CHECKLIST.
 
 ## DURUM / CHECKLIST
 
 | Aşama | Durum |
 |---|---|
 | Statik notebook (Kaggle) v1+v2+v3 | ✅ tamam (`models/faz2-arnavutkoy-deg-s-m.ipynb`) |
-| `/analiz`, `/rapor` endpoint (Claude Opus 4.8) | ✅ çalışıyor |
+| `/analiz` (statik + dinamik), `/rapor` endpoint (Claude Opus 4.8) | ✅ çalışıyor |
 | Paket 1 — STAC/BBOX çekme (`stac_fetch.py`) | ✅ tamam |
 | Paket 1.5 — sahne seçim politikası (`scene_selection.py`) | ✅ tamam |
 | Paket 2 — ön işleme (`preprocess.py`) | ✅ tamam |
 | Paket 3 — in-memory v1 (`v1_candidates.py`) | ✅ tamam (parite: 2584/2914ha birebir) |
 | Paket 4 — in-memory v2 + istatistik eşleme (`v2_validate.py`) | ✅ tamam (parite: ±%5 tolerans içinde) |
-| Paket 5 — parite testi + edge case | ⏳ bekliyor |
+| Paket 5 — orchestrator (`pipeline.py`) + parite testi (`tests/test_parity.py`) | ✅ tamam (4/4 test geçti) |
+| Paket 5 — edge case testleri (`tests/test_edge_cases.py`) | ✅ tamam (7/7 test geçti) |
 | Async job katmanı (başlat→iş no→durum) | ⏳ sonraki faz |
 | geo/ML bağımlılıkları (`requirements.txt`) | ✅ eklendi |
 
