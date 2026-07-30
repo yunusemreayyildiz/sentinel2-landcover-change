@@ -7,6 +7,7 @@ import anthropic
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from src.pipeline import analiz_calistir, analiz_calistir_sahnelerle
@@ -34,6 +35,13 @@ CLAUDE_MODEL = "claude-opus-4-8"
 # restart arası kalıcılık gerekmiyor (iş durumu yalnızca bir analiz oturumu boyunca anlamlı).
 isler: dict[str, dict] = {}
 
+# before/after PNG'ler BİLEREK `isler`'den AYRI tutulur: GET /analiz/{id}/durum
+# `isler[is_no]`'yu olduğu gibi JSON'a serileştiriyor (jsonable_encoder), ham PNG
+# baytı (0x89 ile başlar) UTF-8 değildir ve encoder'ı UnicodeDecodeError'la
+# çökertir. Görüntüler yalnızca aşağıdaki .png uç noktalarından, Response(...)
+# ile ham bayt olarak dönüyor.
+goruntuler: dict[str, dict[str, bytes]] = {}
+
 
 class AnalizIstegi(BaseModel):
     bbox: list[float]
@@ -59,11 +67,21 @@ def _analiz_isini_yurut(
         sonuc = analiz_calistir_sahnelerle(
             item_once, item_sonra, bbox, tarih_once, tarih_sonra, MODEL_CHECKPOINT
         )
-        isler[is_no] = {"durum": "bitti", "asama": "tamamlandi", "ilerleme": 100, "sonuc": sonuc}
+        goruntuler[is_no] = {
+            "once": sonuc.pop("_once_png"),
+            "sonra": sonuc.pop("_sonra_png"),
+        }
+        isler[is_no] = {
+            "durum": "bitti",
+            "asama": "tamamlandi",
+            "ilerleme": 100,
+            "sonuc": sonuc,
+        }
     except (BboxHatasi, MevsimHatasi, SahneBulunamadiHatasi, TileSiniriAsimiHatasi) as e:
         isler[is_no] = {"durum": "hata", "hata": str(e)}
     except Exception as e:
         isler[is_no] = {"durum": "hata", "hata": f"Beklenmeyen hata: {e}"}
+
 
 RAPOR_SISTEM_PROMPTU = """Sen bir GIS analiz kurumunda çalışan teknik rapor yazarısın. Sana JSON formatında \
 bir uydu görüntüsü değişim analizi özeti verilecek. Bu özetten karar vericilere yönelik resmi, kurumsal \
@@ -129,11 +147,17 @@ def analiz_ozeti(
         )
 
     try:
-        return analiz_calistir(bbox_tuple, tarih_once, tarih_sonra, MODEL_CHECKPOINT)
+        sonuc = analiz_calistir(bbox_tuple, tarih_once, tarih_sonra, MODEL_CHECKPOINT)
     except (BboxHatasi, MevsimHatasi) as e:
         raise HTTPException(status_code=400, detail=str(e))
     except (SahneBulunamadiHatasi, TileSiniriAsimiHatasi) as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+    # before/after PNG'ler bu senkron yolda sunulamaz (takip isteği için iş
+    # kaydı yok) -- JSON'a serileştirilemeyen ham bayt olduklarından atılır.
+    sonuc.pop("_once_png", None)
+    sonuc.pop("_sonra_png", None)
+    return sonuc
 
 
 @app.post("/analiz")
@@ -160,9 +184,44 @@ def analiz_durum(is_no: str):
     return is_kaydi
 
 
+@app.get("/analiz/{is_no}/once.png")
+def analiz_once_png(is_no: str):
+    """Perde karşılaştırmasının sol tarafı — before (tarih_once) gerçek renk
+    önizlemesi (bkz. pipeline.rgb_export.rgb_onizleme_png)."""
+    goruntu_kaydi = goruntuler.get(is_no)
+    if goruntu_kaydi is None:
+        raise HTTPException(status_code=404, detail=f"Görüntü bulunamadı (iş no: {is_no}).")
+    return Response(content=goruntu_kaydi["once"], media_type="image/png")
+
+
+@app.get("/analiz/{is_no}/sonra.png")
+def analiz_sonra_png(is_no: str):
+    """Perde karşılaştırmasının sağ tarafı — after (tarih_sonra) gerçek renk
+    önizlemesi."""
+    goruntu_kaydi = goruntuler.get(is_no)
+    if goruntu_kaydi is None:
+        raise HTTPException(status_code=404, detail=f"Görüntü bulunamadı (iş no: {is_no}).")
+    return Response(content=goruntu_kaydi["sonra"], media_type="image/png")
+
+
 @app.get("/geojson")
 def degisim_geojson():
     return json_dosyasi_oku("degisim_analizi.geojson")
+
+
+@app.get("/analiz/{is_no}/geojson")
+def analiz_geojson(is_no: str):
+    """Dinamik bir işin tespit poligonlarını indirilebilir GeoJSON olarak döner
+    (rapor sayfası "GeoJSON indir" butonu) — statik `/geojson`'un dinamik eşdeğeri."""
+    is_kaydi = isler.get(is_no)
+    if is_kaydi is None:
+        raise HTTPException(status_code=404, detail=f"Bilinmeyen iş no: {is_no}")
+    if is_kaydi["durum"] != "bitti":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Analiz henüz tamamlanmadı (durum: {is_kaydi['durum']}).",
+        )
+    return is_kaydi["sonuc"]["geojson"]
 
 
 @app.get("/rapor")

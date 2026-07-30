@@ -1,6 +1,6 @@
-import { API_TABAN_URL } from "@/lib/api";
+import { API_TABAN_URL, dinamikGeojsonUrl } from "@/lib/api";
 
-export default function DisaAktarimPaneli() {
+export default function DisaAktarimPaneli({ isNo }: { isNo?: string }) {
   return (
     <div className="bg-white border border-[#d8dfde] rounded-[9px] flex flex-col gap-3 px-5 py-[18px] w-[380px] shrink-0">
       <p className="font-semibold text-[#14343b] text-[14px]">Dışa Aktarım</p>
@@ -10,8 +10,8 @@ export default function DisaAktarimPaneli() {
       </p>
 
       <a
-        href={`${API_TABAN_URL}/geojson`}
-        download="degisim_analizi.geojson"
+        href={isNo ? dinamikGeojsonUrl(isNo) : `${API_TABAN_URL}/geojson`}
+        download={isNo ? `degisim_analizi_${isNo}.geojson` : "degisim_analizi.geojson"}
         className="bg-[#40544a] border-[1.5px] border-[#14343b] rounded-[7px] py-[11px] flex items-center justify-center text-center"
       >
         <span className="font-bold text-[#14343b] text-[13px]">

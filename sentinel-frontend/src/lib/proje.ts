@@ -23,6 +23,17 @@ export const AOI_SINIRLARI: [[number, number], [number, number]] = [
   [AOI_BBOX.kuzey, AOI_BBOX.dogu],
 ];
 
+// Herhangi bir bbox'i Leaflet'in bounds sirasina (guney-bati, kuzey-dogu) cevirir.
+export function bboxSinirlari(
+  bbox: AnalizBbox
+): [[number, number], [number, number]] {
+  const [minLon, minLat, maxLon, maxLat] = bbox;
+  return [
+    [minLat, minLon],
+    [maxLat, maxLon],
+  ];
+}
+
 // sentinel-backend/CLAUDE.md madde 6 ile ayni ust sinir.
 export const BBOX_ALAN_LIMITI_KM2 = 750;
 

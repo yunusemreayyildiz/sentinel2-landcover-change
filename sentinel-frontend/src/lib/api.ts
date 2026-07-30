@@ -233,6 +233,22 @@ export function analizIlerlemesiniIzle(
   };
 }
 
+// Perde (swipe) karşılaştırması için before/after Sentinel-2 gerçek renk PNG'leri
+// (yalnızca dinamik/tamamlanmış işlerde mevcut — bkz. pipeline.rgb_export).
+export function onceGoruntuUrl(isNo: string): string {
+  return `${API_TABAN_URL}/analiz/${isNo}/once.png`;
+}
+
+export function sonraGoruntuUrl(isNo: string): string {
+  return `${API_TABAN_URL}/analiz/${isNo}/sonra.png`;
+}
+
+// Rapor sayfasındaki "GeoJSON indir" butonu için — dinamik bir işin tespit
+// poligonlarını indirir (statik demo modunda bunun yerine sabit /geojson kullanılır).
+export function dinamikGeojsonUrl(isNo: string): string {
+  return `${API_TABAN_URL}/analiz/${isNo}/geojson`;
+}
+
 export interface RaporSonucu {
   rapor: string;
   kullanim: { girdi_token: number; cikti_token: number };

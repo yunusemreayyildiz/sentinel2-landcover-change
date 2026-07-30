@@ -19,7 +19,9 @@ seçtiği, analizi canlı çalıştıran **dinamik pipeline**.
 
 ```
 sentinel-backend/            ← bu CLAUDE.md buraya
-├── main.py                  ← FastAPI. /analiz ve /rapor ÇALIŞIYOR
+├── main.py                  ← FastAPI. /analiz (senkron+async), /analiz/{id}/durum,
+│                                /analiz/{id}/once.png, /analiz/{id}/sonra.png,
+│                                /analiz/{id}/geojson, /rapor, /geojson ÇALIŞIYOR
 ├── data/
 │   └── analiz_ozeti.json    ← statik analiz özeti (parite referansı)
 ├── models/
@@ -36,12 +38,35 @@ sentinel-frontend/           ← Next.js (ayrı bağlam, ayrı CLAUDE.md)
 
 - **v3 (LLM rapor) YAPILDI:** `/rapor` endpoint'i `analiz_ozeti.json`'u alıp
   **Claude Opus 4.8** ile doğal dilde kurum raporu üretiyor. Planlı değil, canlı.
-- **Dinamik pipeline (Paket 1-5) YAPILDI.** `/analiz` artık iki modlu:
-  parametresiz → statik Arnavutköy demo JSON'u (eski davranış, frontend
-  kırılmaz); `bbox`/`tarih_once`/`tarih_sonra` query param'larıyla →
-  `pipeline.analiz_calistir()` canlı çalışır. **SENKRON ve YAVAŞ** (~1-2 dk,
-  STAC indirme + CNN çıkarımı) — async iş katmanı (başlat→iş no→durum) henüz
-  yok, bkz. DURUM/CHECKLIST.
+- **Dinamik pipeline (Paket 1-5) YAPILDI.** `/analiz` (GET, parametresiz →
+  statik Arnavutköy demo JSON'u; `bbox`/`tarih_once`/`tarih_sonra` query
+  param'larıyla → `pipeline.analiz_calistir()` canlı çalışır, **SENKRON ve
+  YAVAŞ** ~1-2 dk) hâlâ eski davranışıyla duruyor, frontend kırılmaz.
+- **Async iş katmanı YAPILDI:** `POST /analiz` (JSON body: `bbox`,
+  `tarih_once`, `tarih_sonra`) `BackgroundTasks` ile analizi arka planda
+  başlatıp hemen bir `isNo` (uuid4 hex) döner; `GET /analiz/{is_no}/durum`
+  bellek içi `isler` dict'inden `{durum, asama, ilerleme, sonuc?, hata?}`
+  döner. Bellek içi — **worker/dev-server restart'ında (auto-reload dahil)
+  iş kayıtları sıfırlanır**, kalıcılık yok ve gerekmiyor (tek oturumluk analiz
+  durumu). `asama` yalnızca iki gerçek adımı ayırt eder (`sahne_araniyor` /
+  `goruntu_indiriliyor`) — indirme+indeks+CNN `analiz_calistir_sahnelerle`
+  içinde tek bloktan geçtiği için daha ince taneli sahte aşama uydurulmadı.
+- **Dinamik `/analiz` sonucu artık `geojson` alanı da içeriyor**
+  (`pipeline._geojson_uret`): tüm aday poligonlar (durum ayrımı gözetmeden),
+  geometri EPSG:4326'ya çevrilmiş, `merkez_x`/`merkez_y` PROJEKSIYON CRS'inde
+  bırakılmış (statik referans dosyasıyla aynı konvansiyon). `/rapor` bu alanı
+  LLM'e göndermeden önce çıkarır (token israfı).
+- **Before/after Sentinel-2 gerçek renk PNG export'u YAPILDI**
+  (`src/rgb_export.py` — `rgb_onizleme_png`): red/green/blue bantlarından
+  %2-%98 persentil germe (kontrast) + web boyutuna küçültme (en uzun kenar
+  1024px) ile 8-bit PNG üretir. `GET /analiz/{is_no}/once.png` ve
+  `.../sonra.png` ham PNG bayt döner (`image/png`). ⚠️ Bu bayt'lar BİLEREK
+  `isler` (durum) dict'inden AYRI bir `goruntuler` dict'inde tutulur —
+  `GET /analiz/{id}/durum` `isler[is_no]`'yu doğrudan JSON'a serileştirir
+  (FastAPI `jsonable_encoder`), ham PNG bayt'ı (0x89 ile başlar) UTF-8
+  olmadığından `bytes.decode()` orada `UnicodeDecodeError` ile çöker — bunu
+  bir kere yaşadık, düzeltildi. Senkron `GET /analiz` yolunda da aynı sebeple
+  bu iki alan JSON dönmeden önce `pop()`lanıp atılıyor.
 
 ## DURUM / CHECKLIST
 
@@ -56,8 +81,12 @@ sentinel-frontend/           ← Next.js (ayrı bağlam, ayrı CLAUDE.md)
 | Paket 4 — in-memory v2 + istatistik eşleme (`v2_validate.py`) | ✅ tamam (parite: ±%5 tolerans içinde) |
 | Paket 5 — orchestrator (`pipeline.py`) + parite testi (`tests/test_parity.py`) | ✅ tamam (4/4 test geçti) |
 | Paket 5 — edge case testleri (`tests/test_edge_cases.py`) | ✅ tamam (7/7 test geçti) |
-| Async job katmanı (başlat→iş no→durum) | ⏳ sonraki faz |
+| Async job katmanı (`POST /analiz` + `GET /analiz/{id}/durum`) | ✅ tamam (bellek içi, kalıcılık yok) |
+| Dinamik `/analiz` sonucunda `geojson` alanı | ✅ tamam (`pipeline._geojson_uret`) |
+| `/rapor` işin dinamik sonucunu raporlayabiliyor (`?is_no=`) | ✅ tamam |
 | geo/ML bağımlılıkları (`requirements.txt`) | ✅ eklendi |
+| Before/after Sentinel-2 gerçek renk PNG export'u (`src/rgb_export.py`) | ✅ tamam — `GET /analiz/{id}/once.png` + `.../sonra.png` |
+| Dinamik işin GeoJSON'unu indirilebilir dosya olarak servis etme | ✅ tamam — `GET /analiz/{id}/geojson` (frontend "GeoJSON indir" butonu) |
 
 ---
 

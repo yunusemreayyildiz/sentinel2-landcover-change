@@ -92,7 +92,7 @@ export default async function AnalizRaporuSayfasi({
 
         <div className="flex gap-4 w-full items-stretch">
           <SinifGrafik veriler={sinifVerileri} />
-          <DisaAktarimPaneli />
+          <DisaAktarimPaneli isNo={isNo} />
         </div>
 
         <RaporOlusturucu isNo={isNo} />

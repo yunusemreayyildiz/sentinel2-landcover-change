@@ -5,11 +5,16 @@ import dynamic from "next/dynamic";
 import type { Feature, Geometry } from "geojson";
 import {
   degisimGeojsonGetir,
+  onceGoruntuUrl,
+  sonraGoruntuUrl,
+  type AnalizBbox,
   type AnalizOzeti,
   type DegisimOzellikleri,
 } from "@/lib/api";
+import { bboxSinirlari } from "@/lib/proje";
 import PanelKatmanlarFiltre from "@/components/PanelKatmanlarFiltre";
 import AnalizIlerlemeEkrani from "@/components/AnalizIlerlemeEkrani";
+import type { SentinelGoruntuleri } from "@/components/HaritaKarsilastirmaMap";
 
 const HaritaKarsilastirmaMap = dynamic(
   () => import("@/components/HaritaKarsilastirmaMap"),
@@ -48,6 +53,26 @@ export default function HaritaKarsilastirmaEkrani({ isNo }: { isNo?: string }) {
   );
   const ozellikler = dinamikOzellikler ?? tumOzellikler;
 
+  // Perdenin gerçek uydu görüntüsü tarafı: yalnızca dinamik + tamamlanmış bir
+  // çalıştırmada mevcut (backend pipeline.rgb_export). isNo garanti (dinamikSonuc
+  // yalnızca AnalizIlerlemeEkrani onTamamlandi'siyle, isNo biliniyorken dolar).
+  // useMemo İLE referans kararlılığı ŞART: HaritaKarsilastirmaMap bu nesnenin
+  // `sinirlar`'ını harita görünümünü fitBounds ile ayarlamak için kullanıyor —
+  // memoize edilmezse her render'da (ör. perde sürüklerken klipYuzdesi
+  // değiştiğinde) yeni bir dizi referansı üretilir ve harita durmadan
+  // yeniden çerçevelenir.
+  const sentinelGoruntuleri: SentinelGoruntuleri | undefined = useMemo(
+    () =>
+      dinamikSonuc && isNo
+        ? {
+            onceUrl: onceGoruntuUrl(isNo),
+            sonraUrl: sonraGoruntuUrl(isNo),
+            sinirlar: bboxSinirlari(dinamikSonuc.aoi.bbox as AnalizBbox),
+          }
+        : undefined,
+    [dinamikSonuc, isNo]
+  );
+
   useEffect(() => {
     if (!analizBitti || dinamikOzellikler) return;
     degisimGeojsonGetir()
@@ -81,11 +106,18 @@ export default function HaritaKarsilastirmaEkrani({ isNo }: { isNo?: string }) {
 
   useEffect(() => {
     if (!surukleniyor) return;
+    // preventDefault (onPointerDown'da) tek başına yetmiyor -- sürükleme
+    // sayfa üzerinde ilerlerken tarayıcı yine de altındaki metin/butonları
+    // native seçim (mavi highlight) olarak işaretliyor. Sürükleme boyunca
+    // tüm sayfada seçimi devre dışı bırakıp bitince eski haline döndür.
+    const oncekiUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
     const hareket = (e: PointerEvent) => setKlipYuzdesi(yuzdeHesapla(e.clientX));
     const birak = () => setSurukleniyor(false);
     window.addEventListener("pointermove", hareket);
     window.addEventListener("pointerup", birak);
     return () => {
+      document.body.style.userSelect = oncekiUserSelect;
       window.removeEventListener("pointermove", hareket);
       window.removeEventListener("pointerup", birak);
     };
@@ -141,20 +173,26 @@ export default function HaritaKarsilastirmaEkrani({ isNo }: { isNo?: string }) {
             ozellikler={onayliOzellikler}
             gorunur={maskeGorunur}
             klipYuzdesi={klipYuzdesi}
+            sentinelGoruntuleri={sentinelGoruntuleri}
           />
         )}
 
         <p className="absolute top-4 left-4 z-[500] bg-[rgba(20,52,59,0.88)] text-white text-[12px] font-medium px-[10px] py-[5px] rounded-[5px] pointer-events-none">
-          Temmuz 2018 (temel harita)
+          {dinamikSonuc ? dinamikSonuc.sahneler.once : "Temmuz 2018 (temel harita)"}
         </p>
         <p className="absolute top-4 right-4 z-[500] bg-[rgba(20,52,59,0.88)] text-white text-[12px] font-medium px-[10px] py-[5px] rounded-[5px] pointer-events-none">
-          Temmuz 2025 (+ yapılaşma tespiti)
+          {dinamikSonuc
+            ? dinamikSonuc.sahneler.sonra
+            : "Temmuz 2025 (+ yapılaşma tespiti)"}
         </p>
 
         <div
           className="absolute top-0 bottom-0 z-[500] w-[3px] bg-white cursor-ew-resize"
           style={{ left: `${klipYuzdesi}%` }}
-          onPointerDown={() => setSurukleniyor(true)}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            setSurukleniyor(true);
+          }}
         >
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-[38px] rounded-full bg-white shadow flex items-center justify-center font-bold text-[#14343b] text-[15px]">
             ⇔

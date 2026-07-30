@@ -18,6 +18,7 @@ from src import _gis_env  # noqa: F401 — rasterio/odc.stac'tan ÖNCE çalışm
 
 from src.preprocess import nihai_maske as nihai_maske_hesapla
 from src.preprocess import reproject_match
+from src.rgb_export import rgb_onizleme_png
 from src.scene_selection import sahne_ciftini_sec
 from src.stac_fetch import bantlari_yukle
 from src.v1_candidates import DNDBI_ESIK, DNDVI_ESIK, aday_maskesi_uret, mevsim_dogrula, poligonlara_donustur
@@ -57,7 +58,10 @@ def analiz_calistir_sahnelerle(
 
     gdf = v2_dogrula(gdf, ds_sonra_0, checkpoint_yolu, device)
 
-    return _ozet_uret(gdf, bbox, tarih_once, tarih_sonra, item_once, item_sonra)
+    once_png = rgb_onizleme_png(ds_once_0)
+    sonra_png = rgb_onizleme_png(ds_sonra_0)
+
+    return _ozet_uret(gdf, bbox, tarih_once, tarih_sonra, item_once, item_sonra, once_png, sonra_png)
 
 
 def analiz_calistir(
@@ -93,8 +97,17 @@ def _geojson_uret(gdf) -> dict:
     return json.loads(disa_aktarilacak.to_crs(4326).to_json())
 
 
-def _ozet_uret(gdf, bbox, tarih_once, tarih_sonra, item_once, item_sonra) -> dict:
-    """gdf'den analiz_ozeti.json şemasıyla aynı dict'i üretir."""
+def _ozet_uret(
+    gdf, bbox, tarih_once, tarih_sonra, item_once, item_sonra, once_png: bytes, sonra_png: bytes
+) -> dict:
+    """gdf'den analiz_ozeti.json şemasıyla aynı dict'i üretir.
+
+    `_once_png`/`_sonra_png` ham bayt (PNG) — JSON'a serileştirilemez, alt
+    çizgiyle başlıyor ki "bu normal bir sonuç alanı değil" işareti taşısın.
+    main.py bunları `isler` iş kaydına ayrı alanlar olarak taşırken dict'ten
+    POP'lar (bkz. `/analiz/{is_no}/once.png` ve `.../sonra.png`); sync
+    `GET /analiz` yolunda da JSON yanıttan önce discard edilir.
+    """
     aday_poligon = int(len(gdf))
     onaylandi = int((gdf["durum"] == "onaylandi").sum())
     elendi = int((gdf["durum"] == "elendi").sum())
@@ -121,6 +134,8 @@ def _ozet_uret(gdf, bbox, tarih_once, tarih_sonra, item_once, item_sonra) -> dic
         "proje": PROJE_ADI,
         "aoi": {"bbox": list(bbox), "crs": "EPSG:4326"},
         "geojson": _geojson_uret(gdf),
+        "_once_png": once_png,
+        "_sonra_png": sonra_png,
         "sahneler": {
             "once": f"{tarih_once} ({item_once.id})",
             "sonra": f"{tarih_sonra} ({item_sonra.id})",
