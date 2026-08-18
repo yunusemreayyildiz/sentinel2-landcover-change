@@ -8,6 +8,15 @@ __pycache__/
 # secrets
 .env
 
+# local-only docs (AI-assistant context, not for GitHub)
+.claude/
+sentinel-backend/Claude.md
+sentinel-backend/CLAUDE.md
+
+# logs
+test_output.log
+sentinel-backend/test_output.log
+
 # OS
 .DS_Store
 Thumbs.db
